@@ -12,8 +12,3 @@ Install latest stable version with `go get`:
 Install command-line client with `go get`:
 
 	go get -u github.com/AlekSi/pushover/pushover
-
-
-TODO
-----
-* implement retries (https://pushover.net/api#friendly)

@@ -3,6 +3,7 @@ package pushover
 import (
 	"encoding/json"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -122,8 +123,9 @@ func (c *Client) makeData(message *Message) string {
 	return data.Encode()
 }
 
-// Send sends message. It does not retries failed sends.
-// Returns either TemporaryError or FatalError.
+// Send sends message.
+// It does not retries failed sends.
+// Returns either nil, TemporaryError or FatalError.
 func (c *Client) Send(message *Message) error {
 	// prepare request
 	body := strings.NewReader(c.makeData(message))
@@ -167,8 +169,38 @@ func (c *Client) Send(message *Message) error {
 	return &TemporaryError{StatusCode: resp.StatusCode, Message: string(b)}
 }
 
-// SendMessage sends message to specified user. It does not retries failed sends.
-// Returns either TemporaryError or FatalError.
+// SendWithRetries sends message.
+// It does retries failed sends for temporary errors up to maxRetries times with 5 second delay.
+// Specify maxRetries <= 0 for unlimited retries.
+// Returns either nil, TemporaryError (if gave up) or FatalError.
+func (c *Client) SendWithRetries(message *Message, maxRetries int) error {
+	var i int
+	for {
+		err := c.Send(message)
+		if e, ok := err.(net.Error); !ok || !e.Temporary() {
+			return err
+		}
+
+		i++
+		if maxRetries > 0 && maxRetries == i {
+			return err
+		}
+
+		time.Sleep(5 * time.Second)
+	}
+}
+
+// SendMessage sends message to specified user.
+// It does not retries failed sends.
+// Returns either nil, TemporaryError or FatalError.
 func (c *Client) SendMessage(user, message string) error {
 	return c.Send(&Message{User: user, Message: message, Timestamp: time.Now()})
+}
+
+// SendMessageWithRetries sends message to specified user.
+// It does retries failed sends for temporary errors up to maxRetries times with 5 second delay.
+// Specify maxRetries <= 0 for unlimited retries.
+// Returns either nil, TemporaryError (if gave up) or FatalError.
+func (c *Client) SendMessageWithRetries(user, message string, maxRetries int) error {
+	return c.SendWithRetries(&Message{User: user, Message: message, Timestamp: time.Now()}, maxRetries)
 }
