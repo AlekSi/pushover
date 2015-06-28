@@ -5,7 +5,7 @@ import (
 	"net"
 )
 
-// FatalError implementes net.Error and represents temporary error.
+// TemporaryError implementes net.Error and represents temporary error.
 // Request may be retried later after 5 second delay.
 type TemporaryError struct {
 	StatusCode int
