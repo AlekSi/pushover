@@ -22,7 +22,7 @@ const (
 
 // Message sound.
 const (
-	PushoverSound     = "pushover"
+	PushoverSound     = "pushover" // default
 	BikeSound         = "bike"
 	BugleSound        = "bugle"
 	CashregisterSound = "cashregister"
@@ -43,7 +43,8 @@ const (
 	PersistentSound   = "persistent"
 	EchoSound         = "echo"
 	UpdownSound       = "updown"
-	NoneSound         = "none"
+	VibrateSound      = "vibrate" // vibrate only
+	NoneSound         = "none"    // silent
 )
 
 // Message to send.
@@ -53,13 +54,15 @@ type Message struct {
 	Message string // message to send
 
 	// optional parameters
-	Device    string    // device name to send the message directly to that device, rather than all of the user's devices
-	Title     string    // message title
+	Devices   []string  // device names to send the message directly to that devices, rather than all of the user's devices
+	Title     string    // message title, defaults to application name
 	URL       string    // supplementary URL
 	URLTitle  string    // title for supplementary URL
 	Priority  int       // priority, defaults to NormalPriority
-	Timestamp time.Time // message time
 	Sound     string    // message sound
+	Timestamp time.Time // message time
+	HTML      bool      // enable HTML formatting
+	Monospace bool      // enable monospace messages
 
 	// for emergency priority only
 	Retry    int
@@ -89,8 +92,8 @@ func (c *Client) makeData(message *Message) string {
 	data.Set("message", message.Message)
 
 	// set optional parameters
-	if message.Device != "" {
-		data.Set("device", message.Device)
+	if len(message.Devices) != 0 {
+		data.Set("device", strings.Join(message.Devices, ","))
 	}
 	if message.Title != "" {
 		data.Set("title", message.Title)
@@ -104,11 +107,17 @@ func (c *Client) makeData(message *Message) string {
 	if message.Priority != 0 {
 		data.Set("priority", strconv.Itoa(message.Priority))
 	}
+	if message.Sound != "" {
+		data.Set("sound", message.Sound)
+	}
 	if !message.Timestamp.IsZero() {
 		data.Set("timestamp", strconv.FormatInt(message.Timestamp.Unix(), 10))
 	}
-	if message.Sound != "" {
-		data.Set("sound", message.Sound)
+	if message.HTML {
+		data.Set("html", "1")
+	}
+	if message.Monospace {
+		data.Set("monospace", "1")
 	}
 
 	// set parameters for emergency priority
@@ -131,7 +140,7 @@ func (c *Client) Send(message *Message) error {
 	body := strings.NewReader(c.makeData(message))
 	req, err := http.NewRequest("POST", "https://api.pushover.net/1/messages.json", body)
 	if err != nil {
-		return &FatalError{-1, err.Error()}
+		return &FatalError{StatusCode: -1, Message: err.Error()}
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("User-Agent", "github.com/AlekSi/pushover")
@@ -139,14 +148,12 @@ func (c *Client) Send(message *Message) error {
 	// do request and read body
 	resp, err := c.http().Do(req)
 	if err != nil {
-		return &TemporaryError{-1, err.Error()}
+		return &TemporaryError{StatusCode: -1, Message: err.Error()}
 	}
-	if resp.Body != nil {
-		defer resp.Body.Close()
-	}
+	defer resp.Body.Close()
 	b, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return &TemporaryError{resp.StatusCode, err.Error()}
+		return &TemporaryError{StatusCode: resp.StatusCode, Message: err.Error()}
 	}
 
 	// parse response
