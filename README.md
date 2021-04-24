@@ -1,15 +1,6 @@
 pushover
 ========
 
-[![Package documentation](https://godoc.org/github.com/AlekSi/pushover?status.svg)](https://godoc.org/github.com/AlekSi/pushover)
+[![Go Reference](https://pkg.go.dev/badge/github.com/AlekSi/pushover.svg)](https://pkg.go.dev/github.com/AlekSi/pushover)
 
 Push notifications to your phone or browser via [Pushover](http://pushover.net).
-
-Install latest stable version with `go get`:
-
-	go get -u github.com/AlekSi/pushover
-
-Install command-line client with `go get`:
-
-	go get -u github.com/AlekSi/pushover/pushover
-	pushover -h
