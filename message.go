@@ -1,9 +1,10 @@
 package pushover
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
-	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -70,20 +71,27 @@ type Message struct {
 	Callback string
 }
 
-// Client sends messages.
-type Client struct {
+// MessageClient represents Message API client.
+type MessageClient struct {
 	ApplicationToken string       // application API token
 	HTTPClient       *http.Client // if nil, http.DefaultClient is used
 }
 
-func (c *Client) http() *http.Client {
+// NewMessageClient creates new Message API client.
+func NewMessageClient(appToken string) (*MessageClient, error) {
+	return &MessageClient{
+		ApplicationToken: appToken,
+	}, nil
+}
+
+func (c *MessageClient) http() *http.Client {
 	if c.HTTPClient != nil {
 		return c.HTTPClient
 	}
 	return http.DefaultClient
 }
 
-func (c *Client) makeData(message *Message) string {
+func (c *MessageClient) makeData(message *Message) string {
 	data := make(url.Values)
 
 	// set required parameters
@@ -132,15 +140,13 @@ func (c *Client) makeData(message *Message) string {
 	return data.Encode()
 }
 
-// Send sends message.
-// It does not retries failed sends.
-// Returns either nil, TemporaryError or FatalError.
-func (c *Client) Send(message *Message) error {
+// SendMessage sends given message.
+func (c *MessageClient) SendMessage(ctx context.Context, message *Message) error {
 	// prepare request
 	body := strings.NewReader(c.makeData(message))
-	req, err := http.NewRequest("POST", "https://api.pushover.net/1/messages.json", body)
+	req, err := http.NewRequestWithContext(ctx, "POST", "https://api.pushover.net/1/messages.json", body)
 	if err != nil {
-		return &FatalError{StatusCode: -1, Message: err.Error()}
+		return err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("User-Agent", "github.com/AlekSi/pushover")
@@ -148,12 +154,12 @@ func (c *Client) Send(message *Message) error {
 	// do request and read body
 	resp, err := c.http().Do(req)
 	if err != nil {
-		return &TemporaryError{StatusCode: -1, Message: err.Error()}
+		return err
 	}
 	defer resp.Body.Close()
 	b, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return &TemporaryError{StatusCode: resp.StatusCode, Message: err.Error()}
+		return err
 	}
 
 	// parse response
@@ -169,45 +175,14 @@ func (c *Client) Send(message *Message) error {
 		return nil
 	}
 
-	if resp.StatusCode/100 == 4 || (jsonOk && status == 0.0) {
-		return &FatalError{StatusCode: resp.StatusCode, Message: string(b)}
+	return fmt.Errorf("%d: %s", resp.StatusCode, b)
+}
+
+// Send is a shortcut for sending a basic message to given user.
+func (c *MessageClient) Send(ctx context.Context, user, message string) error {
+	m := &Message{
+		User:    user,
+		Message: message,
 	}
-
-	return &TemporaryError{StatusCode: resp.StatusCode, Message: string(b)}
-}
-
-// SendWithRetries sends message.
-// It does retries failed sends for temporary errors up to maxRetries times with 5 second delay.
-// Specify maxRetries <= 0 for unlimited retries.
-// Returns either nil, TemporaryError (if gave up) or FatalError.
-func (c *Client) SendWithRetries(message *Message, maxRetries int) error {
-	var i int
-	for {
-		err := c.Send(message)
-		if e, ok := err.(net.Error); !ok || !e.Temporary() {
-			return err
-		}
-
-		i++
-		if maxRetries > 0 && maxRetries == i {
-			return err
-		}
-
-		time.Sleep(5 * time.Second)
-	}
-}
-
-// SendMessage sends message to specified user.
-// It does not retries failed sends.
-// Returns either nil, TemporaryError or FatalError.
-func (c *Client) SendMessage(user, message string) error {
-	return c.Send(&Message{User: user, Message: message, Timestamp: time.Now()})
-}
-
-// SendMessageWithRetries sends message to specified user.
-// It does retries failed sends for temporary errors up to maxRetries times with 5 second delay.
-// Specify maxRetries <= 0 for unlimited retries.
-// Returns either nil, TemporaryError (if gave up) or FatalError.
-func (c *Client) SendMessageWithRetries(user, message string, maxRetries int) error {
-	return c.SendWithRetries(&Message{User: user, Message: message, Timestamp: time.Now()}, maxRetries)
+	return c.SendMessage(ctx, m)
 }
