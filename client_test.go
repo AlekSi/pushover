@@ -27,8 +27,23 @@ func TestMessageClient(t *testing.T) {
 
 	ctx := context.Background()
 
-	c, err := NewMessageClient(appToken)
+	c, err := NewClient(appToken)
 	require.NoError(t, err)
-	err = c.Send(ctx, userToken, fmt.Sprintf("%s %s", t.Name(), time.Now()))
-	require.NoError(t, err)
+
+	t.Run("Send", func(t *testing.T) {
+		err = c.Send(ctx, userToken, fmt.Sprintf("%s %s", t.Name(), time.Now()))
+		require.NoError(t, err)
+	})
+
+	t.Run("SendGlance", func(t *testing.T) {
+		title := t.Name()
+		text := fmt.Sprint(time.Now())
+		g := &Glance{
+			User:  userToken,
+			Title: &title,
+			Text:  &text,
+		}
+		err = c.SendGlance(ctx, g)
+		require.NoError(t, err)
+	})
 }
