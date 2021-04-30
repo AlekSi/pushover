@@ -217,12 +217,12 @@ type Glance struct {
 	Text    *string
 	Subtext *string
 	Count   *int
-	Percent *int
+	Percent *uint
 }
 
 var (
 	RemoveCount   = new(int)
-	RemovePercent = new(int)
+	RemovePercent = new(uint)
 )
 
 func (c *Client) makeGlanceData(glance *Glance) string {
